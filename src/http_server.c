@@ -71,7 +71,6 @@ void *handle_client(void *client_ptr) {
         free(response.body);
     }
 
-    // 7. Close connection
     close(client_fd);
     return NULL;
 }

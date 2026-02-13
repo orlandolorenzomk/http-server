@@ -10,7 +10,7 @@ http_request_t parse_http_request(const char *buffer, size_t length) {
     request.target_path = NULL;
     request.parse_status = PARSE_BAD_REQUEST;
 
-    const char *end_of_line = strstr(buffer, "\r\n");
+    const char *end_of_line = strstr(buffer, EOR);
     if (!end_of_line || (size_t)(end_of_line - buffer) > MAX_REQUEST_LINE) {
         request.parse_status = PARSE_TOO_LARGE;
         return request;
@@ -35,19 +35,11 @@ http_request_t parse_http_request(const char *buffer, size_t length) {
         return request;
     }
 
-    if (strcmp(method_str, "GET") == 0) {
-        request.method = GET;
-    } else if (strcmp(method_str, "POST") == 0) {
-        request.method = POST;
-    } else if (strcmp(method_str, "PUT") == 0) {
-        request.method = PUT;
-    } else if (strcmp(method_str, "DELETE") == 0) {
-        request.method = DELETE;
-    } else {
-        free(line);
-        request.parse_status = PARSE_UNSUPPORTED;
-        return request;
-    }
+    if (strcmp(method_str, METHOD_GET) == 0) request.method = GET;
+    else if (strcmp(method_str, METHOD_POST) == 0) request.method = POST;
+    else if (strcmp(method_str, METHOD_PUT) == 0) request.method = PUT;
+    else if (strcmp(method_str, METHOD_DELETE) == 0) request.method = DELETE;
+    else { free(line); request.parse_status = PARSE_UNSUPPORTED; return request; }
 
     request.target_path = malloc(strlen(target_str) + 1);
     if (!request.target_path) {
@@ -55,22 +47,19 @@ http_request_t parse_http_request(const char *buffer, size_t length) {
         request.parse_status = PARSE_BAD_REQUEST;
         return request;
     }
+    
     strcpy(request.target_path, target_str);
 
-    if (strcmp(version_str, "HTTP/1.1") == 0) {
-        request.version = HTTP_1_1;
-    } else if (strcmp(version_str, "HTTP/1.0") == 0) {
-        request.version = HTTP_1_0;
-    } else if (strcmp(version_str, "HTTP/0.9") == 0) {
-        request.version = HTTP_0_9;
-    } else {
-        free(request.target_path);
-        free(line);
-        request.parse_status = PARSE_UNSUPPORTED;
-        return request;
-    }
+    if (strcmp(version_str, "HTTP/1.1") == 0) request.version = HTTP_1_1;
+    else if (strcmp(version_str, "HTTP/1.0") == 0) request.version = HTTP_1_0;
+    else if (strcmp(version_str, "HTTP/0.9") == 0) request.version = HTTP_0_9;
+    else if (strcmp(version_str, "HTTP/2") == 0)   request.version = HTTP_2;
+    else if (strcmp(version_str, "HTTP/3") == 0)   request.version = HTTP_3;
+    else { free(request.target_path); free(line); request.parse_status = PARSE_UNSUPPORTED; return request; }
 
     request.parse_status = PARSE_OK;
+
     free(line);
+
     return request;
 }
