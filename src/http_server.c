@@ -1,4 +1,4 @@
-#include "server.h"
+#include "http_server.h"
 #include <stdio.h>      
 #include <netinet/in.h> 
 #include <sys/socket.h> 
@@ -10,6 +10,10 @@
 #include <string.h>
 #include "validation.h"
 #include "log.h"
+#include "http_request.h"
+#include "http_response.h"
+#include "http_parser.h"
+#include "http_handler.h"
 
 static void init_server_addr(struct sockaddr_in *server_addr, uint16_t port) {
     memset(server_addr, 0, sizeof(*server_addr));
@@ -23,14 +27,51 @@ void *handle_client(void *client_ptr) {
     free(client_ptr);
 
     char buffer[MAX_PAYLOAD_SIZE];
+    size_t total_read = 0;
     ssize_t n;
 
-    while ((n = read(client_fd, buffer, MAX_PAYLOAD_SIZE - 1)) > 0) {
-        buffer[n] = '\0';
-        printf("%s\n", buffer);
-        fflush(stdout);
+    while (total_read < MAX_PAYLOAD_SIZE - 1) {
+        n = read(client_fd, buffer + total_read, MAX_PAYLOAD_SIZE - 1 - total_read);
+        if (n <= 0) break; // client closed or error
+        total_read += n;
+        buffer[total_read] = '\0';
+        if (strstr(buffer, "\r\n\r\n")) break; // end of headers
     }
 
+    http_request_t request = parse_http_request(buffer, total_read);
+    http_response_t response = handle_request(&request);
+    char header[1024];
+    int header_len = snprintf(header, sizeof(header),
+        "HTTP/1.1 %d %s\r\n"
+        "Content-Length: %zu\r\n"
+        "Content-Type: %d\r\n"
+        "Connection: close\r\n"
+        "\r\n",
+        response.status_code,
+        (response.status_code == 200) ? "OK" :
+        (response.status_code == 400) ? "Bad Request" : "Not Found",
+        response.content_length,
+        response.content_type
+    );
+
+    size_t written = 0;
+    while (written < (size_t)header_len) {
+        ssize_t w = write(client_fd, header + written, header_len - written);
+        if (w <= 0) break;
+        written += w;
+    }
+
+    if (response.body && response.content_length > 0) {
+        written = 0;
+        while (written < response.content_length) {
+            ssize_t w = write(client_fd, response.body + written, response.content_length - written);
+            if (w <= 0) break;
+            written += w;
+        }
+        free(response.body);
+    }
+
+    // 7. Close connection
     close(client_fd);
     return NULL;
 }

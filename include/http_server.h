@@ -1,5 +1,5 @@
-#ifndef SEVER_H
-#define SERVER_H
+#ifndef HTTP_SEVER_H
+#define HTTP_SERVER_H
 
 #include <stdint.h>
 
@@ -9,4 +9,4 @@
 void start(uint16_t port);
 void *handle_client(void *client_ptr);
 
-#endif // SERVER_H
+#endif // HTTP_SERVER_H
