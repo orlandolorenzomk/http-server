@@ -3,6 +3,15 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+/**
+ * Parses an HTTP request from a buffer.
+ * Extracts the method, target path, and HTTP version from the request line.
+ * 
+ * @param buffer The buffer containing the raw HTTP request
+ * @param length The length of the buffer
+ * @return An http_request_t structure with parsed data and parse status
+ *         The target_path field is dynamically allocated and must be freed
+ */
 http_request_t parse_http_request(const char *buffer, size_t length) {
     http_request_t request;
     request.method = GET; // default
@@ -17,6 +26,11 @@ http_request_t parse_http_request(const char *buffer, size_t length) {
     }
 
     size_t line_len = end_of_line - buffer;
+    if (line_len >= length) {
+        request.parse_status = PARSE_BAD_REQUEST;
+        return request;
+    }
+    
     char *line = malloc(line_len + 1);
     if (!line) {
         request.parse_status = PARSE_BAD_REQUEST;
@@ -47,7 +61,7 @@ http_request_t parse_http_request(const char *buffer, size_t length) {
         request.parse_status = PARSE_BAD_REQUEST;
         return request;
     }
-    
+
     strcpy(request.target_path, target_str);
 
     if (strcmp(version_str, "HTTP/1.1") == 0) request.version = HTTP_1_1;
@@ -62,4 +76,17 @@ http_request_t parse_http_request(const char *buffer, size_t length) {
     free(line);
 
     return request;
+}
+
+/**
+ * Frees the dynamically allocated memory in an HTTP request structure.
+ * Specifically frees the target_path field and sets it to NULL.
+ * 
+ * @param request Pointer to the HTTP request structure to clean up
+ */
+void free_http_request(http_request_t *request) {
+    if (request && request->target_path) {
+        free(request->target_path);
+        request->target_path = NULL;
+    }
 }

@@ -15,6 +15,13 @@
 #include "http_parser.h"
 #include "http_handler.h"
 
+/**
+ * Initializes a sockaddr_in structure with the given port.
+ * Sets up the address to bind to any available interface (INADDR_ANY).
+ * 
+ * @param server_addr Pointer to the sockaddr_in structure to initialize
+ * @param port The port number to bind to (in host byte order)
+ */
 static void init_server_addr(struct sockaddr_in *server_addr, uint16_t port) {
     memset(server_addr, 0, sizeof(*server_addr));
     server_addr->sin_family = AF_INET;
@@ -22,6 +29,15 @@ static void init_server_addr(struct sockaddr_in *server_addr, uint16_t port) {
     server_addr->sin_port = htons(port);
 }
 
+/**
+ * Thread function to handle an individual client connection.
+ * Reads the HTTP request, parses it, generates a response, and sends it back.
+ * Automatically cleans up resources and closes the connection when done.
+ * 
+ * @param client_ptr Pointer to an int containing the client socket file descriptor
+ *                   This memory is freed by the function
+ * @return Always returns NULL (pthread requirement)
+ */
 void *handle_client(void *client_ptr) {
     int client_fd = *(int *)client_ptr;
     free(client_ptr);
@@ -40,18 +56,36 @@ void *handle_client(void *client_ptr) {
 
     http_request_t request = parse_http_request(buffer, total_read);
     http_response_t response = handle_request(&request);
+    
+    const char *status_msg;
+    switch (response.status_code) {
+        case OK:
+            status_msg = STATUS_OK_MSG;
+            break;
+        case BAD_REQUEST:
+            status_msg = STATUS_BAD_REQUEST_MSG;
+            break;
+        case NOT_FOUND:
+            status_msg = STATUS_NOT_FOUND_MSG;
+            break;
+        default:
+            status_msg = "Unknown";
+            break;
+    }
+    
+    const char *content_type_str = (response.content_type == TEXT_HTML) ? "text/html" : "text/plain";
+    
     char header[1024];
     int header_len = snprintf(header, sizeof(header),
         "HTTP/1.1 %d %s\r\n"
         "Content-Length: %zu\r\n"
-        "Content-Type: %d\r\n"
+        "Content-Type: %s\r\n"
         "Connection: close\r\n"
         "\r\n",
         response.status_code,
-        (response.status_code == 200) ? "OK" :
-        (response.status_code == 400) ? "Bad Request" : "Not Found",
+        status_msg,
         response.content_length,
-        response.content_type
+        content_type_str
     );
 
     size_t written = 0;
@@ -71,10 +105,18 @@ void *handle_client(void *client_ptr) {
         free(response.body);
     }
 
+    free_http_request(&request);
     close(client_fd);
     return NULL;
 }
 
+/**
+ * Starts the HTTP server on the specified port.
+ * Creates a listening socket and enters an infinite loop accepting connections.
+ * Each client connection is handled in a separate detached thread.
+ * 
+ * @param port The port number to listen on (must be >= 1024)
+ */
 void start(uint16_t port) {
     log_write(LOG_INFO, "Starting TCP Server on port %u", port);
 
@@ -120,7 +162,7 @@ void start(uint16_t port) {
 
         *client_fd = accept(server_fd, NULL, NULL);
         if (sock_failure(*client_fd)) {
-            log_write(LOG_ERROR, "Error while accepting incominig connection");
+            log_write(LOG_ERROR, "Error while accepting incoming connection");
             free(client_fd);
             continue;
         }

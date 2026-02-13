@@ -3,6 +3,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 
+/* Log level string representations */
 char *type[] = {
     "INFO",
     "DEBUG",
@@ -10,13 +11,21 @@ char *type[] = {
     "ERROR"
 };
 
+/* ANSI color codes for each log level */
 char *colors[] = {
-    "\x1b[0m",
-    "\x1b[32m",
-    "\x1b[1;33m",
-    "\x1b[31m"
+    "\x1b[0m",     // INFO - white
+    "\x1b[32m",    // DEBUG - green
+    "\x1b[1;33m",  // WARN - yellow
+    "\x1b[31m"     // ERROR - red
 };
 
+/**
+ * Writes a formatted log message with timestamp and color-coded level.
+ * 
+ * @param level The severity level of the log message
+ * @param fmt Format string (printf-style) for the log message
+ * @param ... Variable arguments for the format string
+ */
 void log_write(log_level_t level, const char *fmt, ...) {
     time_t now;
     time(&now);
